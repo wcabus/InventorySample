@@ -14,13 +14,16 @@
 
 using System;
 using System.Collections.Concurrent;
-
+using Windows.Devices.PointOfService;
 using Windows.UI.ViewManagement;
-
+using Inventory.Data;
 using Microsoft.Extensions.DependencyInjection;
 
 using Inventory.Services;
 using Inventory.ViewModels;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using RuhRoh;
+using RuhRoh.Extensions.Microsoft.DependencyInjection;
 
 namespace Inventory
 {
@@ -30,7 +33,7 @@ namespace Inventory
 
         static private ServiceProvider _rootServiceProvider = null;
 
-        static public void Configure(IServiceCollection serviceCollection)
+        static public void Configure(IServiceCollection serviceCollection, bool addSomeChaos)
         {
             serviceCollection.AddSingleton<ISettingsService, SettingsService>();
             serviceCollection.AddSingleton<IDataServiceFactory, DataServiceFactory>();
@@ -76,7 +79,26 @@ namespace Inventory
             serviceCollection.AddTransient<ValidateConnectionViewModel>();
             serviceCollection.AddTransient<CreateDatabaseViewModel>();
 
+            if (addSomeChaos)
+            {
+                AddSomeChaos(serviceCollection);
+            }
+
             _rootServiceProvider = serviceCollection.BuildServiceProvider();
+        }
+
+        public static void AddSomeChaos(IServiceCollection serviceCollection)
+        {
+            serviceCollection.AffectSingleton<ILoginService, LoginService>()
+                .WhenCalling(x => x.SignInWithWindowsHelloAsync())
+                .Throw(new InvalidOperationException("Windows Hello is currently not available."))
+                .AfterNCalls(2);
+
+            serviceCollection.AffectSingleton<ICustomerService, CustomerService>()
+                .WhenCalling(x =>
+                    x.GetCustomersAsync(With.Any<DataRequest<Customer>>()))
+                .SlowItDownBy(TimeSpan.FromSeconds(20))
+                .EveryNCalls(2);
         }
 
         static public ServiceLocator Current
